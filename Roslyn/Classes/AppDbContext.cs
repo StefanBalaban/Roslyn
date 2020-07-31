@@ -11,7 +11,7 @@ namespace Roslyn.Classes
 
         protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
         {
-            optionsBuilder.UseSqlServer("Data Source=ws-dell5540-460;Initial Catalog=motopro-db;Integrated Security=True");
+            optionsBuilder.UseSqlServer("");
         }
     }
 }
