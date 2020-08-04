@@ -13,8 +13,11 @@ namespace Roslyn
                     public class Make
                     {
                         [Get]
+                        [Post]
+                        [Put]
                         public string Name { get; set; }
-
+                        [Include]                        
+                        public List<Model> Models { get; set; }
                     }
                 }";
             Generator.Generate(models);

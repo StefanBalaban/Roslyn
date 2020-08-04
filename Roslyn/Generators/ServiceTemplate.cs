@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
@@ -16,7 +17,7 @@ namespace Roslyn.Generators
             return GenerateClass(modelClassName, properties);
         }
 
-        private static string GenerateClass(string modelClassName, Dictionary<string, string> properties)
+        private static string GenerateClass(string modelClassName, List<KeyValuePair<string, string>> properties)
         {
             return 
                 $@"
@@ -35,7 +36,7 @@ namespace Roslyn.Generators
 
                     public async Task<IEnumerable<{modelClassName}Dto>> GetAsync()
                     {{
-                        return _mapper.Map<List<{modelClassName}Dto>>(await _dbContext.ListAllAsync());
+                        return _mapper.Map<List<{modelClassName}Dto>>(await _dbContext.ListAllAsync({GenerateIncludes(properties.Where(x => x.Value == "Include").Select(x => x.Key))}));
                     }}
 
                     public async Task<IEnumerable<{modelClassName}Dto>> GetAsync({modelClassName}Dto t)
@@ -43,21 +44,23 @@ namespace Roslyn.Generators
                         if (t == null) throw new ArgumentNullException(nameof(t));
                         var {modelClassName.ToCamelCase()} = _mapper.Map<{modelClassName}>(t);
                         return _mapper.Map<List<{modelClassName}Dto>>(
-                            (await _dbContext.ListAllAsync())
+                            (await _dbContext.ListAllAsync({GenerateIncludes(properties.Where(x => x.Value == "Include").Select(x => x.Key))}))
                                 .Where(x => {GeneratePredicates(properties.Where(x => x.Value == "Get" ).Select(x =>x.Key), modelClassName.ToCamelCase())});
                     }}
 
                     public async Task<{modelClassName}Dto> GetAsync(int id)
                     {{
-                        return _mapper.Map<{modelClassName}Dto>(await _dbContext.GetByIdAsync(id));
+                        return _mapper.Map<{modelClassName}Dto>(await _dbContext.GetByIdAsync(id {GenerateIncludesForGetById(properties.Where(x => x.Value == "Include").Select(x => x.Key)) }));
                     }}
 
                     public async Task<{modelClassName}Dto> PostAsync({modelClassName}Dto t)
                     {{
                         if (t == null) throw new ArgumentNullException(nameof(t));
                         var {modelClassName.ToCamelCase()} = _mapper.Map<{modelClassName}>(t);
-                        await _dbContext.AddAsync({modelClassName.ToCamelCase()});
-                        return _mapper.Map<{modelClassName}Dto>({modelClassName.ToCamelCase()});
+                        var {modelClassName.ToCamelCase()}CreateObject = new {modelClassName}();
+                        {GenerateCreateObjectProperties(properties.Where(x => x.Value == "Post").Select(x => x.Key), modelClassName.ToCamelCase())}
+                        await _dbContext.AddAsync({modelClassName.ToCamelCase()}CreateObject);
+                        return _mapper.Map<{modelClassName}Dto>({modelClassName.ToCamelCase()}CreateObject);
                     }}
 
                     public async Task<{modelClassName}Dto> PutAsync({modelClassName}Dto t)
@@ -65,9 +68,9 @@ namespace Roslyn.Generators
                         if (t == null) throw new ArgumentNullException(nameof(t));
                         var {modelClassName.ToCamelCase()} = _mapper.Map<{modelClassName}>(t);
                         var {modelClassName.ToCamelCase()}InDb = await _dbContext.GetByIdAsync({modelClassName.ToCamelCase()}.Id);
-                        {modelClassName.ToCamelCase()}InDb.Name = {modelClassName.ToCamelCase()}.Name;
-                        await _dbContext.UpdateAsync({modelClassName.ToCamelCase()});
-                        return _mapper.Map<{modelClassName}Dto>({modelClassName.ToCamelCase()});
+                        {GeneratePutObjectProperties(properties.Where(x => x.Value == "Put").Select(x => x.Key), modelClassName.ToCamelCase())}
+                        await _dbContext.UpdateAsync();
+                        return _mapper.Map<{modelClassName}Dto>({modelClassName.ToCamelCase()}InDb);
                     }}
                     public async Task<bool> DeleteAsync(int id)
                     {{
@@ -79,6 +82,56 @@ namespace Roslyn.Generators
                     
                 }}
             }}";
+        }
+
+        private static string GenerateIncludesForGetById(IEnumerable<string> properties)
+        {
+            var includes = GenerateIncludes(properties);
+            if (String.IsNullOrWhiteSpace(includes)) return "";
+            return ", " + includes;
+        }
+
+        private static string GeneratePutObjectProperties(IEnumerable<string> properties, string modelObjectName)
+        {
+            var propertyNames = properties.ToList();
+            StringBuilder str = new StringBuilder("");
+            foreach (var property in properties)
+            {
+                str.AppendLine(@$"{modelObjectName}InDb.{property} = {modelObjectName}.{property};");
+            }
+            return str.ToString();
+        }
+
+        private static string GenerateCreateObjectProperties(IEnumerable<string> properties, string modelObjectName)
+        {
+            var propertyNames = properties.ToList();
+            StringBuilder str = new StringBuilder("");
+            foreach (var property in properties)
+            {
+                str.AppendLine(@$"{modelObjectName}CreateObject.{property} = {modelObjectName}.{property};");
+            }
+            return str.ToString();
+        }
+
+        private static string GenerateIncludes(IEnumerable<string> properties)
+        {
+            var propertyNames = properties.ToList();
+            if (propertyNames.Count == 0) return "";
+            StringBuilder str = new StringBuilder("new List<string> {");
+            for (var i = 0; i < propertyNames.Count; i++)
+            {
+                if (((i == 0) && (i + 1 == propertyNames.Count)) || (i + 1 == propertyNames.Count && i != 0) )
+                    str.Append(@$" ""{propertyNames[i]}"" ");
+
+                if (i + 1 < propertyNames.Count && i != 0)
+                    str.Append(@$" ""{propertyNames[i]}"", ");
+
+                if (i == 0 && i + 1 != propertyNames.Count)
+                    str.Append(@$" ""{propertyNames[i]}"", ");
+            }
+
+            str.Append("}");
+            return str.ToString();
         }
 
         private static string GeneratePredicates(IEnumerable<string> properties, string modelClassName)
@@ -103,10 +156,10 @@ namespace Roslyn.Generators
             return str.ToString();
         }
 
-        private static Dictionary<string, string> GetPropertiesAndAttributes(IEnumerable<MemberDeclarationSyntax> members)
+        private static List<KeyValuePair<string, string>> GetPropertiesAndAttributes(IEnumerable<MemberDeclarationSyntax> members)
         {
             List<string> attributeName;
-            Dictionary<string, string> propertiesWithAttributes = new Dictionary<string, string>();
+            List<KeyValuePair<string, string>> propertiesWithAttributes = new List<KeyValuePair<string, string>>();
             foreach (var memberDeclarationSyntax in members)
             {
                 attributeName = new List<string>();
@@ -118,7 +171,7 @@ namespace Roslyn.Generators
                 }
                 
                 if (attributeName != null)
-                    attributeName.ForEach(x => propertiesWithAttributes.Add(property.Identifier.Text,  x));
+                    attributeName.ForEach(x => propertiesWithAttributes.Add(new KeyValuePair<string, string>(property.Identifier.Text, x)));
             }
 
             return propertiesWithAttributes;
