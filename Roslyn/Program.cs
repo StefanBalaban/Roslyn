@@ -1,6 +1,4 @@
-﻿using System;
-using Microsoft.CodeAnalysis.CSharp;
-using Roslyn.Generators;
+﻿using Roslyn.Generators;
 
 
 namespace Roslyn
@@ -9,23 +7,17 @@ namespace Roslyn
     {
         static void Main(string[] args)
         {
-            GenerateSampleViewModel();
-        }
-        static void GenerateSampleViewModel()
-        {
-            const string models = 
-                @"namespace Models
+            const string models =
+                @"namespace Model
                 {
-                    public class Item
+                    public class Make
                     {
-                        public string ItemName { get; set; }
+                        [Get]
+                        public string Name { get; set; }
+
                     }
                 }";
-            var node = CSharpSyntaxTree.ParseText(models).GetRoot();
-            var viewModel = ServicesGeneration.GenerateService(node);
-            if (viewModel != null)
-                Console.WriteLine(viewModel.ToFullString());
-            Console.ReadLine();
+            Generator.Generate(models);
         }
     }
 }
