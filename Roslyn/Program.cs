@@ -1,4 +1,8 @@
-﻿using Roslyn.Generators;
+﻿using System;
+using System.IO;
+using Microsoft.CodeAnalysis;
+using Roslyn.BetterGenerators;
+using Roslyn.Generators;
 
 
 namespace Roslyn
@@ -7,20 +11,17 @@ namespace Roslyn
     {
         static void Main(string[] args)
         {
-            const string models =
-                @"namespace Model
-                {
-                    public class Make
-                    {
-                        [Get]
-                        [Post]
-                        [Put]
-                        public string Name { get; set; }
-                        [Include]                        
-                        public List<Model> Models { get; set; }
-                    }
-                }";
-            Generator.Generate(models);
+            var code = new StreamReader("..\\..\\..\\Classes\\Person.cs").ReadToEnd();
+            //Generator.Generate(code);
+
+            //var syntaxGeneratorHelper = new SyntaxGeneratorSample();
+            //var syntaxNode = syntaxGeneratorHelper.Generate();
+
+            var syntaxGeneratorHelper = new SyntaxGeneratorHelper();
+            var syntaxNode = syntaxGeneratorHelper.GenerateSyntaxNode(code);
+
+            Console.WriteLine(syntaxNode);
+            
         }
     }
 }
