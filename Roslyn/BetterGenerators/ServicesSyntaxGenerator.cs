@@ -27,7 +27,7 @@ namespace Roslyn.BetterGenerators
             var usingDeclarationSystemThreadingTasks = generator.NamespaceImportDeclaration("System.Threading.Tasks");
 
             // _dbContext
-            var appDbContextField = generator.FieldDeclaration("_dbContext", SyntaxFactory.ParseTypeName("AppDbContext"), Accessibility.Private);
+            var appDbContextField = generator.FieldDeclaration("_dbContext", SyntaxFactory.ParseTypeName("AppDbContext"), Accessibility.Private, DeclarationModifiers.ReadOnly);
 
             var constructorParameters = new[] { generator.ParameterDeclaration("appDbContext", SyntaxFactory.ParseTypeName("AppDbContext")) };
             var constructorBody = new[] {
@@ -90,15 +90,15 @@ namespace Roslyn.BetterGenerators
         {
             var methodBody = new List<SyntaxNode>
             {
-                SyntaxFactory.ParseStatement($"{modelClassName.ToCamelCase()} = _dbContext.{modelClassName}s.FindAsync(id);"),
+                SyntaxFactory.ParseStatement($"var {modelClassName.ToCamelCase()} = await _dbContext.{modelClassName}s.FindAsync(id);"),
                 SyntaxFactory.ParseStatement($"if ({modelClassName.ToCamelCase()} == null) return false;"),
                 SyntaxFactory.ParseStatement($"_dbContext.Remove({modelClassName.ToCamelCase()});"),
                 SyntaxFactory.ParseStatement($"await _dbContext.SaveChangesAsync();"),
-                SyntaxFactory.ParseStatement($"return true")
+                SyntaxFactory.ParseStatement($"return true;")
             };
 
             return generator.MethodDeclaration("DeleteAsync", new[] { generator.ParameterDeclaration("id", generator.TypeExpression(SpecialType.System_Int32)) }, null,
-                generator.TypeExpression(SpecialType.System_Boolean),
+                SyntaxFactory.ParseTypeName($"Task<bool>"),
                 Accessibility.Public,
                 DeclarationModifiers.Async, methodBody);
         }
@@ -110,7 +110,7 @@ namespace Roslyn.BetterGenerators
             var methodBody = new List<SyntaxNode>
             {
                 SyntaxFactory.ParseStatement("if (t == null) throw new ArgumentNullException(nameof(t));"),
-                SyntaxFactory.ParseStatement($"{modelClassName.ToCamelCase()}InDb = _dbContext.{modelClassName}s.FindAsync(t.Id);"),
+                SyntaxFactory.ParseStatement($"var {modelClassName.ToCamelCase()}InDb = await _dbContext.{modelClassName}s.FindAsync(t.Id);"),
                 SyntaxFactory.ParseStatement($"if ({modelClassName.ToCamelCase()}InDb == null) return null;")
             };
             foreach (var property in properties)
@@ -134,7 +134,7 @@ namespace Roslyn.BetterGenerators
             var methodBody = new List<SyntaxNode>
             {
                 SyntaxFactory.ParseStatement("if (t == null) throw new ArgumentNullException(nameof(t));"),
-                SyntaxFactory.ParseStatement($"{modelClassName.ToCamelCase()} = new {modelClassName}();")
+                SyntaxFactory.ParseStatement($"var {modelClassName.ToCamelCase()} = new {modelClassName}();")
             };
             foreach (var property in properties)
             {
@@ -168,7 +168,7 @@ namespace Roslyn.BetterGenerators
             }
             foreach (var property in properties)
             {
-                methodBody.Add(SyntaxFactory.ParseStatement($".Where(x => x.{property} == t.{property})"));
+                methodBody.Add(SyntaxFactory.ParseStatement($".Where(x => x.{property} == null || x.{property}.Equals(t.{property}))"));
             }
 
             methodBody.Add(SyntaxFactory.ParseStatement($".ToListAsync();"));
@@ -188,7 +188,7 @@ namespace Roslyn.BetterGenerators
             {
                 methodBody.Add(SyntaxFactory.ParseStatement($".Include(x => x.{include})"));
             }
-            methodBody.Add(SyntaxFactory.ParseStatement($".FindAsync(id);"));
+            methodBody.Add(SyntaxFactory.ParseStatement($".FirstOrDefaultAsync(x => x.Id == id);"));
 
             return generator.MethodDeclaration("GetAsync", new[] { generator.ParameterDeclaration("id", generator.TypeExpression(SpecialType.System_Int32)) }, null,
                 SyntaxFactory.ParseTypeName($"Task<{modelClassName}>"),

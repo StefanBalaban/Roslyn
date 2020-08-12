@@ -11,11 +11,10 @@ namespace Roslyn.Classes
         [Get]
         [Post]
         [Put]
-        [Include]
         public string Name { get; set; }
         [Include]
         [Post]
         [Put]
-        public List<string> Models { get; set; }
+        public List<Child> Children { get; set; }
     }
 }
